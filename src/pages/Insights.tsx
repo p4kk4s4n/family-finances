@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { go } from '../App';
 import { Bar, Card, Empty, Money } from '../components/ui';
 import { today, useData } from '../components/hooks';
 import { basketInflation, brandSavings, budgetStatus, daysInMonth, itemsInMonth, leakage, spendByCategory, topItems } from '../insights/metrics';
@@ -50,6 +51,9 @@ export default function Insights() {
           </div>
         ))}
         {!infl.tracked.length && <Empty>Keep snapping. Price trends appear once an item shows up across periods.</Empty>}
+        <button className="btn block" onClick={() => go('prices')}>
+          📉 Open Price Pulse &amp; Pantry →
+        </button>
       </Card>
 
       <Card title="💧 Receipt leakage">

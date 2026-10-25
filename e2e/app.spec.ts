@@ -131,9 +131,70 @@ test('settings: one-tap update check', async ({ page }) => {
   await expect(page.getByTestId('update-status')).toContainText("You're on the latest version");
 });
 
+test('Price Pulse & Pantry and Bank Statement Import workflows', async ({ page }) => {
+  // 1. Seed two receipts at different stores via JSON import so we can verify Price Pulse & Bank Matching
+  const exportSeed = {
+    app: 'family-finances',
+    format: 2,
+    exportedAt: new Date().toISOString(),
+    receipts: [
+      { id: 1, createdAt: 1000, status: 'saved', source: 'photo', merchant: 'Aldi', date: '2026-10-10', currency: 'USD', fxRate: 1, total: 3.1, totalUSD: 3.1 },
+      { id: 2, createdAt: 2000, status: 'saved', source: 'photo', merchant: 'Target', date: '2026-10-18', currency: 'USD', fxRate: 1, total: 4.5, totalUSD: 4.5 },
+    ],
+    items: [
+      { receiptId: 1, date: '2026-10-10', merchant: 'Aldi', rawName: 'Eggs 12ct', normalizedName: 'eggs large dozen', category: 'Dairy & Eggs', quantity: 1, unitPrice: 3.1, total: 3.1, currency: 'USD', fxRate: 1, unitPriceUSD: 3.1, totalUSD: 3.1, isDiscretionary: false, brandTier: 'store' },
+      { receiptId: 2, date: '2026-10-18', merchant: 'Target', rawName: 'Good & Gather Eggs', normalizedName: 'eggs large dozen', category: 'Dairy & Eggs', quantity: 1, unitPrice: 4.5, total: 4.5, currency: 'USD', fxRate: 1, unitPriceUSD: 4.5, totalUSD: 4.5, isDiscretionary: false, brandTier: 'store' },
+    ],
+    budgets: [],
+  };
+
+  await page.goto('./#/share');
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'seed.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(exportSeed)),
+  });
+  await expect(page.getByText('Imported 2 receipts')).toBeVisible();
+
+  // 2. Verify Price Pulse & Pantry
+  await page.goto('./#/prices');
+  await expect(page.getByText('eggs large dozen')).toBeVisible();
+  await expect(page.getByText('Best:')).toContainText('Aldi');
+  await shot(page, '10-price-pulse');
+
+  await page.getByRole('tab', { name: /Price Jumps/ }).click();
+  await expect(page.getByText('eggs large dozen')).toBeVisible();
+
+  await page.getByRole('tab', { name: /Pantry/ }).click();
+  await expect(page.getByText('eggs large dozen')).toBeVisible();
+
+  // 3. Verify Bank Statement Import & Reconciliation
+  await page.goto('./#/bank');
+  const csvContent = [
+    'Transaction Date,Description,Amount',
+    '10/20/2026,"TARGET #0412",4.50', // 2 days after Target receipt ($4.50) -> auto-matched!
+    '10/21/2026,"SHELL OIL 9981",38.00', // Unmatched -> missing receipt
+  ].join('\n');
+
+  await page.getByTestId('statement-file-input').setInputFiles({
+    name: 'october-statement.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csvContent),
+  });
+
+  await expect(page.getByTestId('bank-status-msg')).toContainText('1 matched to receipts, 1 missing receipts');
+  await expect(page.getByTestId('bank-tx-row')).toContainText('SHELL OIL');
+  await shot(page, '11-bank-import');
+
+  // One-tap import the unmatched Shell fuel charge
+  await page.getByTestId('add-expense-btn').click();
+  await page.getByRole('tab', { name: /Imported \(1\)/ }).click();
+  await expect(page.getByTestId('bank-tx-row')).toContainText('SHELL OIL');
+});
+
 test('coming soon features are visible', async ({ page }) => {
   await page.goto('./#/more');
-  await expect(page.locator('.pill-soon')).toHaveCount(4);
+  await expect(page.locator('.pill-soon')).toHaveCount(2);
   await page.getByText('Family Relay').click();
   await expect(page.getByText('Shared household envelopes')).toBeVisible();
 });

@@ -1,14 +1,15 @@
 import { db } from '../db/schema';
 import { findDuplicate } from '../db/dedupe';
-import type { Budget, Item, Receipt } from '../types';
+import type { BankTransaction, Budget, Item, Receipt } from '../types';
 
 export interface ExportFile {
   app: 'family-finances';
-  format: 1;
+  format: 1 | 2;
   exportedAt: string;
   receipts: Omit<Receipt, 'image' | 'draft'>[];
   items: Item[];
   budgets: Budget[];
+  bankTransactions?: BankTransaction[];
 }
 
 /** JSON export of saved data. Photos and the API key are never included. */
@@ -16,11 +17,12 @@ export async function buildExport(): Promise<ExportFile> {
   const receipts = (await db.receipts.where('status').equals('saved').toArray()).map(({ image: _i, draft: _d, ...r }) => r);
   return {
     app: 'family-finances',
-    format: 1,
+    format: 2,
     exportedAt: new Date().toISOString(),
     receipts,
     items: await db.items.toArray(),
     budgets: await db.budgets.toArray(),
+    bankTransactions: await db.bankTransactions.toArray(),
   };
 }
 
@@ -38,7 +40,7 @@ export async function importExport(file: Blob, opts: { replaceBudgets?: boolean 
   if (data?.app !== 'family-finances' || !Array.isArray(data.receipts)) throw new Error('Not a Family Finances export file.');
   let added = 0;
   let skipped = 0;
-  await db.transaction('rw', db.receipts, db.items, db.budgets, async () => {
+  await db.transaction('rw', db.receipts, db.items, db.budgets, db.bankTransactions, async () => {
     const existing = await db.receipts.where('status').equals('saved').toArray();
     for (const r of data.receipts) {
       const { id: oldId, ...rest } = r;

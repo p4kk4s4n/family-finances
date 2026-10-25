@@ -133,6 +133,21 @@ label.mini { margin: 0; font-size: 0.72rem; }
 .digest { white-space: pre-wrap; font-family: inherit; font-size: 0.88rem; background: var(--bg); padding: 12px; border-radius: 12px; margin: 0; }
 .bullets { padding-left: 20px; line-height: 1.6; }
 
+.seg-tabs { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 12px; margin-top: 8px; }
+.seg-tab { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 8px 6px; border-radius: 9px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.seg-tab.active { background: var(--card); color: var(--brand-2); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+.pulse-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.pulse-item:last-child { border-bottom: 0; }
+.pulse-head { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.pulse-head > div:first-child { display: flex; flex-direction: column; gap: 2px; }
+.store-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.store-chip { font-size: 0.8rem; background: var(--bg); border: 1px solid var(--line); padding: 4px 8px; border-radius: 8px; }
+.store-chip.best { border-color: var(--brand-2); background: rgba(42, 166, 118, 0.1); }
+.history-box { margin-top: 8px; padding: 8px 10px; background: var(--bg); border-radius: 10px; }
+.tx-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.tx-actions select { flex: 1; min-width: 140px; padding: 6px 8px; font-size: 0.85rem; }
+
 .bottomnav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-around; align-items: flex-end; background: var(--card); border-top: 1px solid var(--line); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); z-index: 10; max-width: 640px; margin: 0 auto; }
 .navbtn { flex: 1; background: none; border: 0; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 0.7rem; padding: 4px 0; cursor: pointer; }
 .navbtn.active { color: var(--brand-2); font-weight: 700; }

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Budget, Item, Receipt, Settings } from '../types';
+import type { BankTransaction, Budget, Item, Receipt, Settings } from '../types';
 import { CATEGORIES } from '../lib/categories';
 
 export class FamilyFinancesDB extends Dexie {
@@ -7,6 +7,7 @@ export class FamilyFinancesDB extends Dexie {
   items!: Table<Item, number>;
   budgets!: Table<Budget, string>;
   settings!: Table<Settings, string>;
+  bankTransactions!: Table<BankTransaction, number>;
 
   constructor() {
     super('family-finances');
@@ -15,6 +16,13 @@ export class FamilyFinancesDB extends Dexie {
       items: '++id, receiptId, date, category, normalizedName, merchant',
       budgets: 'category',
       settings: 'key',
+    });
+    this.version(2).stores({
+      receipts: '++id, status, date, merchant, createdAt, imageHash',
+      items: '++id, receiptId, date, category, normalizedName, merchant',
+      budgets: 'category',
+      settings: 'key',
+      bankTransactions: '++id, status, date, merchant, matchedReceiptId',
     });
     this.on('populate', (tx) => {
       tx.table('budgets').bulkAdd(CATEGORIES.map((c) => ({ category: c.name, monthlyLimit: c.defaultBudget })));

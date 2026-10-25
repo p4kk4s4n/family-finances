@@ -12,6 +12,8 @@ import Budgets from './pages/Budgets';
 import Share from './pages/Share';
 import SettingsPage from './pages/Settings';
 import ComingSoon from './pages/ComingSoon';
+import PricePulse from './pages/PricePulse';
+import BankImport from './pages/BankImport';
 
 export function useRoute(): string[] {
   const read = () => (window.location.hash.replace(/^#\/?/, '') || 'home').split('/');
@@ -66,13 +68,19 @@ export default function App() {
     case 'insights': body = <Insights />; break;
     case 'more': body = <More />; break;
     case 'budgets': body = <Budgets />; break;
+    case 'prices': body = <PricePulse />; break;
+    case 'bank': body = <BankImport />; break;
     case 'share': body = <Share />; break;
     case 'settings': body = <SettingsPage />; break;
     case 'soon': body = <ComingSoon feature={arg} />; break;
     default: body = <Dashboard />;
   }
 
-  const active = ['budgets', 'share', 'settings', 'soon'].includes(page) ? 'more' : page === 'receipt' ? 'receipts' : page;
+  const active = ['budgets', 'prices', 'bank', 'share', 'settings', 'soon'].includes(page)
+    ? 'more'
+    : page === 'receipt'
+      ? 'receipts'
+      : page;
 
   return (
     <div className="app">

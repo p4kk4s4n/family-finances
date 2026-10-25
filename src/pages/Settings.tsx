@@ -134,9 +134,10 @@ export default function SettingsPage() {
             className="btn danger"
             onClick={async () => {
               if (!confirm('Erase ALL receipts and items on this device? This cannot be undone.')) return;
-              await db.transaction('rw', db.receipts, db.items, async () => {
+              await db.transaction('rw', db.receipts, db.items, db.bankTransactions, async () => {
                 await db.receipts.clear();
                 await db.items.clear();
+                await db.bankTransactions.clear();
               });
             }}
           >

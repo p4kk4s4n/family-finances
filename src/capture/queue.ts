@@ -5,6 +5,7 @@ import { resolveRate, round2, toUSD } from '../lib/currency';
 import { downscaleImage, imageDHash } from './image';
 import { parseReceipt } from './gemini';
 import { emptyDraft } from './validate';
+import { rescanUnmatchedTransactions } from '../bank/reconcile';
 
 /** Store captured files immediately (offline-safe), then process them in the background. */
 export async function enqueueFiles(files: Blob[], source: ReceiptSource = 'photo'): Promise<number[]> {
@@ -127,6 +128,8 @@ export async function saveReviewed(id: number, draft: ParsedReceipt, manualRate?
     await db.items.bulkAdd(items);
     await db.receipts.update(id, patch);
   });
+
+  void rescanUnmatchedTransactions();
 }
 
 /** Re-open a saved receipt for editing. */

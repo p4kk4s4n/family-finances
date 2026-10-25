@@ -1,6 +1,6 @@
 export type BrandTier = 'store' | 'name' | 'unknown';
 export type ReceiptStatus = 'queued' | 'processing' | 'needs_review' | 'error' | 'saved';
-/** 'bank' is reserved for future bank-statement import (coming soon). */
+/** 'bank' is used for bank-statement imported charges. */
 export type ReceiptSource = 'photo' | 'share' | 'manual' | 'import' | 'bank';
 
 export interface ParsedItem {
@@ -82,4 +82,22 @@ export interface Settings {
   leakageThreshold: number; // USD
   backupBeforeUpdate: boolean;
   monthlyBudgetTotal?: number; // optional override; defaults to sum of category budgets
+}
+
+export type BankTxStatus = 'unmatched' | 'matched' | 'imported' | 'ignored';
+
+export interface BankTransaction {
+  id?: number;
+  importedAt: number;
+  date: string; // YYYY-MM-DD
+  description: string; // Raw merchant / bank memo
+  merchant: string; // Cleaned merchant name
+  amount: number; // Positive = expense/charge in original currency
+  currency: string; // 'USD' | 'BRL' | etc.
+  amountUSD: number; // Converted to USD
+  fxRate: number;
+  suggestedCategory: string;
+  status: BankTxStatus;
+  matchedReceiptId?: number; // Linked receipt (pre-existing or created via 1-tap import)
+  statementName?: string;
 }
