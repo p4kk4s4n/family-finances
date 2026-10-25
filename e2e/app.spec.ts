@@ -86,7 +86,7 @@ test('capture → AI parse → review → save → dashboard insights', async ({
 });
 
 test('Brazilian reais receipt is converted to USD', async ({ page }) => {
-  await page.route('**/api.frankfurter.app/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rates: { USD: 0.2 } }) }));
+  await page.route('**/api.frankfurter.dev/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rates: { USD: 0.2 } }) }));
   await page.route('**/generativelanguage.googleapis.com/**', (route) =>
     route.fulfill(
       geminiReply({

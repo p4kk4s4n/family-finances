@@ -19,7 +19,10 @@ export function toUSD(amount: number, rate: number): number {
 
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 
-/** Historical rate (1 unit of `currency` -> USD) from the free Frankfurter (ECB) API. */
+/**
+ * Fetches exchange rate (1 unit of `currency` -> USD) using direct CORS-enabled endpoints
+ * (`api.frankfurter.dev` primary, with jsDelivr currency-api and open.er-api.com fallbacks).
+ */
 export async function fetchRateToUSD(
   currency: string,
   date: string,
@@ -28,15 +31,47 @@ export async function fetchRateToUSD(
   if (currency === 'USD') return 1;
   const today = new Date().toISOString().slice(0, 10);
   const d = /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today ? date : 'latest';
+  const curUpper = currency.toUpperCase();
+  const curLower = currency.toLowerCase();
+
+  // 1. Primary: Frankfurter v1 on .dev (direct 200 OK with CORS; .app 301-redirects without CORS headers)
   try {
-    const r = await fetchFn(`https://api.frankfurter.app/${d}?from=${currency}&to=USD`);
-    if (!r.ok) return null;
-    const j = await r.json();
-    const rate = j?.rates?.USD;
-    return typeof rate === 'number' && rate > 0 ? rate : null;
+    const r = await fetchFn(`https://api.frankfurter.dev/v1/${d}?from=${curUpper}&to=USD`);
+    if (r.ok) {
+      const j = await r.json();
+      const rate = j?.rates?.USD;
+      if (typeof rate === 'number' && rate > 0) return rate;
+    }
   } catch {
-    return null;
+    // try backup provider
   }
+
+  // 2. Backup 1: jsDelivr daily currency-api CDN (supports historical date or @latest)
+  try {
+    const tag = d === 'latest' ? 'latest' : d;
+    const r = await fetchFn(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${tag}/v1/currencies/${curLower}.json`);
+    if (r.ok) {
+      const j = await r.json();
+      const rate = j?.[curLower]?.usd;
+      if (typeof rate === 'number' && rate > 0) return rate;
+    }
+  } catch {
+    // try backup provider
+  }
+
+  // 3. Backup 2: ExchangeRate-API open endpoint
+  try {
+    const r = await fetchFn(`https://open.er-api.com/v6/latest/${curUpper}`);
+    if (r.ok) {
+      const j = await r.json();
+      const rate = j?.rates?.USD;
+      if (typeof rate === 'number' && rate > 0) return rate;
+    }
+  } catch {
+    // all online providers failed
+  }
+
+  return null;
 }
 
 export interface ResolvedRate {
