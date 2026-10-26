@@ -43,6 +43,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
       },
       manifest: {
+        id: 'family-finances-pwa',
         name: 'Family Finances',
         short_name: 'Family Finances',
         description: 'Snap receipts, track line items, beat inflation.',
