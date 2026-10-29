@@ -337,4 +337,26 @@ test('Galaxy Fold slim cover screen (280px) and unfolded wide screen (768px) ada
   expect(wide.navLabelFont).toBe(standard.navLabelFont);
   expect(slim.cardTitleFont).toBe(standard.cardTitleFont);
   expect(wide.cardTitleFont).toBe(standard.cardTitleFont);
+
+  // 4. Verify Settings -> Display & Accessibility sliders (Small, Medium, Large, Extra Large, Vision Impaired)
+  await page.setViewportSize({ width: 280, height: 653 });
+  await page.goto('./#/settings');
+  await expect(page.getByText('Display & Accessibility')).toBeVisible();
+  await expect(page.getByTestId('font-scale-label')).toHaveText('Medium');
+
+  // Set sliders to Vision Impaired (step 4)
+  await page.getByTestId('font-scale-slider').fill('4');
+  await page.getByTestId('icon-scale-slider').fill('4');
+  await page.getByTestId('resolution-scale-slider').fill('3');
+  await expect(page.getByTestId('font-scale-label')).toHaveText('Vision Impaired');
+  await expect(page.getByTestId('icon-scale-label')).toHaveText('Vision Impaired');
+  await expect(page.getByTestId('resolution-scale-label')).toHaveText('Extra Large');
+  await shot(page, '15-settings-display-sliders');
+
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Budgets this month' })).toBeVisible();
+  const visionSlim = await measureTypographyAndOverflow();
+  expect(visionSlim.overflowX).toBe(false);
+  expect(parseFloat(visionSlim.h1Font)).toBeGreaterThan(parseFloat(slim.h1Font) * 1.4);
+  expect(parseFloat(visionSlim.navIconFont)).toBeGreaterThan(parseFloat(slim.navIconFont) * 1.4);
 });

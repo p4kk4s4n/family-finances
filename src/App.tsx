@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getSettings } from './db/schema';
 import { drainShareInbox, kickQueue, recoverQueue } from './capture/queue';
 import { prefetchOcrAssets } from './capture/ocr';
+import { applyDisplayScale } from './lib/display';
 import Dashboard from './pages/Dashboard';
 import Capture from './pages/Capture';
 import Receipts from './pages/Receipts';
@@ -73,6 +74,10 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
+
+  useEffect(() => {
+    applyDisplayScale(settings);
+  }, [settings?.fontScale, settings?.iconScale, settings?.resolutionScale]);
 
   useEffect(() => {
     if (!settings) return;

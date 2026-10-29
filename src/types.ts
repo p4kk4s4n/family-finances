@@ -79,6 +79,8 @@ export interface Budget {
   monthlyLimit: number; // USD
 }
 
+export type ScaleStep = 0 | 1 | 2 | 3 | 4;
+
 export interface Settings {
   key: 'app';
   apiKey?: string;
@@ -91,6 +93,9 @@ export interface Settings {
   ocrFallback: boolean; // fall back to on-device OCR when AI fails
   ocrOnly: boolean; // privacy mode: read on this device only
   notifyWhenReady: boolean; // show notification when background worker finishes a receipt
+  fontScale?: ScaleStep; // 0=Small, 1=Medium, 2=Large, 3=Extra Large, 4=Vision Impaired
+  iconScale?: ScaleStep; // 0=Small, 1=Medium, 2=Large, 3=Extra Large, 4=Vision Impaired
+  resolutionScale?: ScaleStep; // 0=Small, 1=Medium, 2=Large, 3=Extra Large, 4=Vision Impaired
 }
 
 export type BankTxStatus = 'unmatched' | 'matched' | 'imported' | 'ignored';

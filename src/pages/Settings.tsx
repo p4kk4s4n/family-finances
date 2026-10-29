@@ -4,10 +4,12 @@ import { db, getSettings, saveSettings } from '../db/schema';
 import { Card } from '../components/ui';
 import { testApiKey } from '../capture/gemini';
 import { fetchRateToUSD } from '../lib/currency';
+import { applyDisplayScale, clampStep, SCALE_LABELS } from '../lib/display';
 import { CURRENT_VERSION, checkAndUpdate, type UpdateStatus } from '../updater';
 import { exportBlob, exportFilename } from '../share/exportData';
 import { downloadBlob } from '../share/shareHelpers';
 import { today } from '../components/hooks';
+import type { ScaleStep } from '../types';
 
 export default function SettingsPage() {
   const s = useLiveQuery(() => getSettings(), []);
@@ -28,6 +30,16 @@ export default function SettingsPage() {
 
   if (!s) return null;
 
+  const fontStep = clampStep(s.fontScale, 1);
+  const iconStep = clampStep(s.iconScale, 1);
+  const resStep = clampStep(s.resolutionScale, 1);
+
+  const setScale = (field: 'fontScale' | 'iconScale' | 'resolutionScale', raw: string) => {
+    const step = clampStep(Number(raw), 1);
+    applyDisplayScale({ ...s, [field]: step });
+    void saveSettings({ [field]: step });
+  };
+
   const runUpdate = () =>
     checkAndUpdate({
       onStatus: setUpd,
@@ -36,6 +48,103 @@ export default function SettingsPage() {
 
   return (
     <>
+      <Card title="🔍 Display &amp; Accessibility">
+        <p className="muted">
+          Adjust resolution density, font size, and icon size for slim screens (Galaxy Fold cover), standard phones, or vision comfort.
+        </p>
+
+        <div className="scale-control">
+          <div className="scale-head">
+            <label htmlFor="resolution-scale-slider">Resolution / UI scale</label>
+            <span className="pill" data-testid="resolution-scale-label">{SCALE_LABELS[resStep]}</span>
+          </div>
+          <input
+            id="resolution-scale-slider"
+            data-testid="resolution-scale-slider"
+            className="scale-slider"
+            type="range"
+            min={0}
+            max={4}
+            step={1}
+            value={resStep}
+            onChange={(e) => setScale('resolutionScale', e.target.value)}
+          />
+          <div className="scale-ticks" aria-hidden="true">
+            <span>S</span>
+            <span>M</span>
+            <span>L</span>
+            <span>XL</span>
+            <span>Vision</span>
+          </div>
+        </div>
+
+        <div className="scale-control">
+          <div className="scale-head">
+            <label htmlFor="font-scale-slider">Font size</label>
+            <span className="pill" data-testid="font-scale-label">{SCALE_LABELS[fontStep]}</span>
+          </div>
+          <input
+            id="font-scale-slider"
+            data-testid="font-scale-slider"
+            className="scale-slider"
+            type="range"
+            min={0}
+            max={4}
+            step={1}
+            value={fontStep}
+            onChange={(e) => setScale('fontScale', e.target.value)}
+          />
+          <div className="scale-ticks" aria-hidden="true">
+            <span>S</span>
+            <span>M</span>
+            <span>L</span>
+            <span>XL</span>
+            <span>Vision</span>
+          </div>
+        </div>
+
+        <div className="scale-control">
+          <div className="scale-head">
+            <label htmlFor="icon-scale-slider">Icon size</label>
+            <span className="pill" data-testid="icon-scale-label">{SCALE_LABELS[iconStep]}</span>
+          </div>
+          <input
+            id="icon-scale-slider"
+            data-testid="icon-scale-slider"
+            className="scale-slider"
+            type="range"
+            min={0}
+            max={4}
+            step={1}
+            value={iconStep}
+            onChange={(e) => setScale('iconScale', e.target.value)}
+          />
+          <div className="scale-ticks" aria-hidden="true">
+            <span>S</span>
+            <span>M</span>
+            <span>L</span>
+            <span>XL</span>
+            <span>Vision</span>
+          </div>
+        </div>
+
+        <div className="btn-row">
+          {([0, 1, 2, 3, 4] as ScaleStep[]).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className={`btn small ${fontStep === preset && iconStep === preset && resStep === preset ? 'primary' : ''}`}
+              onClick={() => {
+                applyDisplayScale({ fontScale: preset, iconScale: preset, resolutionScale: preset });
+                void saveSettings({ fontScale: preset, iconScale: preset, resolutionScale: preset });
+              }}
+            >
+              {SCALE_LABELS[preset]}
+            </button>
+          ))}
+        </div>
+      </Card>
+
       <Card title="🔄 App updates">
         <p className="muted">
           Installed version <code>{CURRENT_VERSION.sha}</code>

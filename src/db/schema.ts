@@ -42,6 +42,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ocrFallback: true,
   ocrOnly: false,
   notifyWhenReady: true,
+  fontScale: 1,
+  iconScale: 1,
+  resolutionScale: 1,
 };
 
 export async function getSettings(): Promise<Settings> {
