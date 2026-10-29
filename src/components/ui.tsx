@@ -32,6 +32,7 @@ export function Money({ v, c = 'USD' }: { v: number | null | undefined; c?: stri
 const STATUS_LABEL: Record<ReceiptStatus, string> = {
   queued: 'Queued',
   processing: 'Reading…',
+  ai_failed: 'OCR pending',
   needs_review: 'Review',
   error: 'Error',
   saved: 'Saved',

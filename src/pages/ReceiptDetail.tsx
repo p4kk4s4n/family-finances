@@ -45,6 +45,15 @@ export default function ReceiptDetail({ id }: { id: number }) {
   if (receipt.status === 'needs_review' && receipt.draft) {
     return (
       <>
+        {receipt.parsedBy === 'ocr' && (
+          <div className="banner warn" data-testid="ocr-banner">
+            <span>
+              🔍 <b>Read on this device (OCR)</b>
+              {receipt.aiError ? ` because AI was unavailable (${receipt.aiError})` : ''}. Please double-check items and amounts.
+            </span>
+            <button className="btn small" onClick={() => requeue(id)}>Retry with AI</button>
+          </div>
+        )}
         {receipt.duplicateOf && (
           <div className="banner warn">
             ⚠️ This looks like a duplicate of <button className="link" onClick={() => go(`receipt/${receipt.duplicateOf}`)}>another receipt</button>.
@@ -62,9 +71,22 @@ export default function ReceiptDetail({ id }: { id: number }) {
       <Card title="Receipt" action={<StatusPill s={receipt.status} />}>
         {image}
         {receipt.status === 'error' && <p className="error">{receipt.error}</p>}
-        {receipt.status === 'queued' && <p className="muted">Waiting to be read. Needs a Gemini API key and a connection.</p>}
+        {receipt.status === 'ai_failed' && (
+          <p className="muted">
+            Reading receipt on this device with OCR… {receipt.aiError ? `(${receipt.aiError})` : ''}
+          </p>
+        )}
+        {receipt.status === 'queued' && (
+          <p className="muted">
+            {receipt.aiError
+              ? `Retrying AI soon (${receipt.aiError})…`
+              : 'Waiting to be read. Runs in the background even if the screen locks.'}
+          </p>
+        )}
         <div className="btn-row">
-          {(receipt.status === 'error' || receipt.status === 'queued') && <button className="btn" onClick={() => requeue(id)}>Retry</button>}
+          {(receipt.status === 'error' || receipt.status === 'queued' || receipt.status === 'ai_failed') && (
+            <button className="btn" onClick={() => requeue(id)}>Retry with AI</button>
+          )}
           <button className="btn" onClick={() => db.receipts.update(id, { status: 'needs_review', draft: emptyDraft() })}>Enter manually</button>
           <button className="btn danger" onClick={remove}>Delete</button>
         </div>

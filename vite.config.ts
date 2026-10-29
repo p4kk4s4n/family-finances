@@ -1,4 +1,6 @@
 /// <reference types="vitest" />
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -25,6 +27,41 @@ function versionFile(): Plugin {
   };
 }
 
+/** Copies Tesseract.js worker, WASM core, and English + Portuguese traineddata into public/ocr/ automatically. */
+function copyOcrAssets(): Plugin {
+  const syncAssets = () => {
+    const outDir = resolve(__dirname, 'public/ocr');
+    mkdirSync(outDir, { recursive: true });
+    const files: Array<[string, string]> = [
+      ['node_modules/tesseract.js/dist/worker.min.js', 'worker.min.js'],
+      ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js'],
+      ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm', 'tesseract-core-simd-lstm.wasm'],
+      ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', 'tesseract-core-lstm.wasm.js'],
+      ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm', 'tesseract-core-lstm.wasm'],
+      ['node_modules/tesseract.js-core/tesseract-core-simd.wasm.js', 'tesseract-core-simd.wasm.js'],
+      ['node_modules/tesseract.js-core/tesseract-core.wasm.js', 'tesseract-core.wasm.js'],
+      ['node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz', 'eng.traineddata.gz'],
+      ['node_modules/@tesseract.js-data/por/4.0.0_best_int/por.traineddata.gz', 'por.traineddata.gz'],
+    ];
+    for (const [srcRel, destName] of files) {
+      const src = resolve(__dirname, srcRel);
+      const dest = resolve(outDir, destName);
+      if (existsSync(src) && !existsSync(dest)) {
+        copyFileSync(src, dest);
+      }
+    }
+  };
+  return {
+    name: 'ff-copy-ocr-assets',
+    buildStart() {
+      syncAssets();
+    },
+    configureServer() {
+      syncAssets();
+    },
+  };
+}
+
 export default defineConfig({
   base,
   define: {
@@ -33,6 +70,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    copyOcrAssets(),
     versionFile(),
     VitePWA({
       strategies: 'injectManifest',
@@ -41,6 +79,7 @@ export default defineConfig({
       injectRegister: false,
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        globIgnores: ['**/ocr/**'],
       },
       manifest: {
         id: 'family-finances-pwa',

@@ -87,7 +87,7 @@ label.inline { margin-top: 8px; }
 .pill-needs_review { background: #fff1cc; color: #8a6200; }
 .pill-error { background: #fde0de; color: #a12a25; }
 .pill-saved { background: #d8f3e6; color: #17694a; }
-.pill-processing, .pill-queued { background: #dfeaff; color: #2a4f9a; }
+.pill-processing, .pill-queued, .pill-ai_failed { background: #dfeaff; color: #2a4f9a; }
 .pill-soon { background: #ece3ff; color: #5b3aa8; }
 
 .hero { text-align: center; }

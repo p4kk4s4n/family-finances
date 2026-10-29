@@ -66,20 +66,30 @@ export default function SettingsPage() {
         <p className="hint">Updates never erase your receipts. They're stored on this device, separate from the app files.</p>
       </Card>
 
-      <Card title="🔑 Gemini API key">
+      <Card title="🔑 Gemini API key &amp; On-device OCR">
         {s.apiKey ? (
           <>
             <p>Key saved on this device: <code>{showKey ? s.apiKey : `${s.apiKey.slice(0, 4)}••••${s.apiKey.slice(-4)}`}</code></p>
             <div className="btn-row">
               <button className="btn" onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
-              <button className="btn" onClick={async () => setKeyMsg((await testApiKey(s.apiKey!, s.model)).message)}>Test key</button>
+              <button
+                className="btn"
+                data-testid="test-key-btn"
+                onClick={async () => {
+                  setKeyMsg('Testing connection to Google AI…');
+                  const res = await testApiKey(s.apiKey!, s.model);
+                  setKeyMsg(res.message);
+                }}
+              >
+                Test key
+              </button>
               <button className="btn danger" onClick={() => { if (confirm('Remove API key?')) void saveSettings({ apiKey: undefined }); }}>Remove</button>
             </div>
           </>
         ) : (
           <>
             <p className="muted">
-              Needed to read receipts. Get a free key at{' '}
+              Needed for high-accuracy AI receipt reading. Get a free key at{' '}
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>. It stays on this device and is never exported.
             </p>
             <div className="row-between">
@@ -88,10 +98,44 @@ export default function SettingsPage() {
             </div>
           </>
         )}
-        {keyMsg && <p className="muted">{keyMsg}</p>}
+        {keyMsg && <p className="muted" data-testid="key-test-msg">{keyMsg}</p>}
         <label>
-          Model
+          Preferred model (automatically falls back to <code>gemini-2.5-flash</code> &amp; <code>gemini-2.5-flash-lite</code> if busy)
           <input value={s.model} onChange={(e) => saveSettings({ model: e.target.value })} />
+        </label>
+        <hr />
+        <label className="check">
+          <input
+            type="checkbox"
+            data-testid="ocr-fallback-toggle"
+            checked={s.ocrFallback ?? true}
+            onChange={(e) => saveSettings({ ocrFallback: e.target.checked })}
+          />
+          Use on-device OCR (English + Portuguese) when AI is unavailable or fails
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            data-testid="ocr-only-toggle"
+            checked={s.ocrOnly ?? false}
+            onChange={(e) => saveSettings({ ocrOnly: e.target.checked })}
+          />
+          Read receipts on this device only (never send photos to Google)
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            data-testid="notify-ready-toggle"
+            checked={s.notifyWhenReady ?? true}
+            onChange={async (e) => {
+              const checked = e.target.checked;
+              await saveSettings({ notifyWhenReady: checked });
+              if (checked && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission().catch(() => undefined);
+              }
+            }}
+          />
+          Notify me when a receipt finishes reading in the background
         </label>
       </Card>
 

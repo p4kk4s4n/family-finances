@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, getSettings } from './db/schema';
-import { drainShareInbox, processQueue, recoverQueue } from './capture/queue';
+import { drainShareInbox, kickQueue, recoverQueue } from './capture/queue';
+import { prefetchOcrAssets } from './capture/ocr';
 import Dashboard from './pages/Dashboard';
 import Capture from './pages/Capture';
 import Receipts from './pages/Receipts';
@@ -44,20 +45,51 @@ const NAV = [
 export default function App() {
   const route = useRoute();
   const settings = useLiveQuery(() => getSettings(), []);
-  const pending = useLiveQuery(() => db.receipts.where('status').equals('queued').count(), []) ?? 0;
+  const pending = useLiveQuery(() => db.receipts.where('status').anyOf('queued', 'ai_failed').count(), []) ?? 0;
+  const ocrFallbackCount =
+    useLiveQuery(
+      () =>
+        db.receipts
+          .where('status')
+          .equals('needs_review')
+          .filter((r) => r.parsedBy === 'ocr')
+          .count(),
+      [],
+    ) ?? 0;
+  const waitingForKey = pending + ocrFallbackCount;
 
   useEffect(() => {
     void recoverQueue();
     const params = new URLSearchParams(window.location.search);
     if (params.has('shared')) void drainShareInbox();
-    const online = () => void processQueue();
-    window.addEventListener('online', online);
-    return () => window.removeEventListener('online', online);
+    const onOnline = () => void kickQueue();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void recoverQueue();
+    };
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   useEffect(() => {
-    if (settings?.apiKey) void processQueue();
-  }, [settings?.apiKey]);
+    if (!settings) return;
+    if (settings.ocrFallback || settings.ocrOnly) {
+      void prefetchOcrAssets();
+    }
+    if (settings.apiKey && !settings.ocrOnly) {
+      void db.receipts
+        .where('status')
+        .equals('needs_review')
+        .filter((r) => r.parsedBy === 'ocr' && /No Gemini API key/i.test(r.aiError || ''))
+        .modify({ status: 'queued', parsedBy: undefined, aiError: undefined, strikes: 0, attempts: 0 })
+        .then(() => kickQueue());
+      return;
+    }
+    void kickQueue();
+  }, [settings?.apiKey, settings?.ocrFallback, settings?.ocrOnly]);
 
   const [page, arg] = route;
   let body: JSX.Element;
@@ -87,9 +119,9 @@ export default function App() {
       <header className="topbar">
         <h1 onClick={() => go('home')}>Family Finances</h1>
       </header>
-      {settings && !settings.apiKey && pending > 0 && page !== 'settings' && (
+      {settings && !settings.apiKey && !settings.ocrOnly && waitingForKey > 0 && page !== 'settings' && (
         <div className="banner" role="alert">
-          <span>🔑 {pending} receipt{pending > 1 ? 's' : ''} waiting. Add your Gemini API key to read them.</span>
+          <span>🔑 {waitingForKey} receipt{waitingForKey > 1 ? 's' : ''} waiting. Add your Gemini API key to read them with AI.</span>
           <button className="btn small" onClick={() => go('settings')}>Add key</button>
         </div>
       )}

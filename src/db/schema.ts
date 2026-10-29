@@ -39,6 +39,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autoFxRate: true,
   leakageThreshold: 10,
   backupBeforeUpdate: true,
+  ocrFallback: true,
+  ocrOnly: false,
+  notifyWhenReady: true,
 };
 
 export async function getSettings(): Promise<Settings> {

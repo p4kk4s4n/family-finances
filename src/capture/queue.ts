@@ -3,9 +3,51 @@ import { findDuplicate } from '../db/dedupe';
 import type { Item, ParsedReceipt, Receipt, ReceiptSource } from '../types';
 import { resolveRate, round2, toUSD } from '../lib/currency';
 import { downscaleImage, imageDHash } from './image';
-import { parseReceipt } from './gemini';
+import { ocrReceipt } from './ocr';
 import { emptyDraft } from './validate';
+import { runWorkerQueue, type WorkerQueueDeps } from './worker-queue';
 import { rescanUnmatchedTransactions } from '../bank/reconcile';
+
+let wakeLockSentinel: any = null;
+let ocrRunning = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Keep the screen awake while a receipt is actively uploading/parsing so Android doesn't freeze the tab. */
+export async function acquireWakeLock(): Promise<void> {
+  if (typeof navigator === 'undefined' || !('wakeLock' in navigator) || wakeLockSentinel) return;
+  try {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+    wakeLockSentinel?.addEventListener?.('release', () => {
+      wakeLockSentinel = null;
+    });
+  } catch {
+    wakeLockSentinel = null;
+  }
+}
+
+export async function releaseWakeLock(): Promise<void> {
+  if (!wakeLockSentinel) return;
+  try {
+    await wakeLockSentinel.release();
+  } catch {
+    // ignore
+  } finally {
+    wakeLockSentinel = null;
+  }
+}
+
+/** Ask for one-time notification permission (when enabled in settings) so backgrounded receipts can alert the user. */
+export async function maybeRequestNotificationPermission(): Promise<void> {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'default') return;
+  try {
+    const s = await getSettings();
+    if (s.notifyWhenReady) await Notification.requestPermission();
+  } catch {
+    // ignore
+  }
+}
 
 /** Store captured files immediately (offline-safe), then process them in the background. */
 export async function enqueueFiles(files: Blob[], source: ReceiptSource = 'photo'): Promise<number[]> {
@@ -30,7 +72,8 @@ export async function enqueueFiles(files: Blob[], source: ReceiptSource = 'photo
     ids.push(id);
   }
   navigator.vibrate?.(40);
-  void processQueue();
+  void maybeRequestNotificationPermission();
+  void kickQueue();
   return ids;
 }
 
@@ -38,46 +81,122 @@ export async function createManualReceipt(): Promise<number> {
   return db.receipts.add({ createdAt: Date.now(), status: 'needs_review', source: 'manual', draft: emptyDraft() });
 }
 
-let running = false;
-
-export async function processQueue(): Promise<void> {
-  if (running) return;
-  running = true;
+/**
+ * Process any receipts in `ai_failed` status using on-device Tesseract OCR in the open page.
+ */
+export async function runPendingOcr(ocrFn: (file: Blob, mime: string) => Promise<ParsedReceipt> = ocrReceipt): Promise<void> {
+  if (ocrRunning) return;
+  ocrRunning = true;
   try {
-    const settings = await getSettings();
-    if (!settings.apiKey || !navigator.onLine) return;
     for (;;) {
-      const next = await db.receipts.where('status').equals('queued').first();
+      const next = await db.receipts.where('status').equals('ai_failed').first();
       if (!next?.id) break;
       await db.receipts.update(next.id, { status: 'processing', error: undefined });
       try {
         if (!next.image) throw new Error('No image attached.');
-        const draft = await parseReceipt(next.image, next.imageType || 'image/jpeg', settings.apiKey, settings.model);
+        const draft = await ocrFn(next.image, next.imageType || next.image.type || 'image/jpeg');
         const others = await db.receipts.where('status').anyOf('saved', 'needs_review').toArray();
         const dup = findDuplicate({ id: next.id, merchant: draft.merchant, date: draft.date, total: draft.total }, others);
         await db.receipts.update(next.id, {
           status: 'needs_review',
           draft,
+          parsedBy: 'ocr',
+          error: undefined,
           duplicateOf: dup?.id ?? next.duplicateOf,
         });
       } catch (e) {
-        await db.receipts.update(next.id, { status: 'error', error: (e as Error).message });
+        const msg = (e as Error).message || 'On-device OCR failed.';
+        await db.receipts.update(next.id, {
+          status: 'error',
+          error: next.aiError ? `${next.aiError} — ${msg}` : msg,
+        });
       }
     }
   } finally {
-    running = false;
+    ocrRunning = false;
+  }
+}
+
+function scheduleNextRetryIfNeeded(): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  void db.receipts
+    .where('status')
+    .equals('queued')
+    .toArray()
+    .then((queued) => {
+      const now = Date.now();
+      const times = queued.map((r) => r.nextAttemptAt ?? now);
+      if (!times.length) return;
+      const earliest = Math.min(...times);
+      const delay = Math.max(500, earliest - now + 50);
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void processQueue();
+      }, delay);
+    });
+}
+
+/**
+ * Notify the Service Worker (and register Background Sync) so the Gemini call continues even if the screen locks,
+ * and also run the shared queue loop + pending on-device OCR in the page.
+ */
+export async function kickQueue(): Promise<void> {
+  void acquireWakeLock();
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      reg?.active?.postMessage({ type: 'PROCESS_QUEUE' });
+      if (reg && 'sync' in reg) {
+        await (reg as any).sync.register('ff-process-queue').catch(() => undefined);
+      }
+    } catch {
+      // ignore SW registration lookup errors
+    }
+  }
+  await processQueue();
+}
+
+export async function processQueue(deps?: WorkerQueueDeps): Promise<void> {
+  await acquireWakeLock();
+  try {
+    await runWorkerQueue(deps);
+    await runPendingOcr();
+  } finally {
+    const remaining = await db.receipts.where('status').anyOf('queued', 'processing', 'ai_failed').count();
+    if (remaining === 0) {
+      await releaseWakeLock();
+    } else {
+      scheduleNextRetryIfNeeded();
+    }
   }
 }
 
 export async function requeue(id: number): Promise<void> {
-  await db.receipts.update(id, { status: 'queued', error: undefined });
-  void processQueue();
+  await db.receipts.update(id, {
+    status: 'queued',
+    error: undefined,
+    aiError: undefined,
+    parsedBy: undefined,
+    strikes: 0,
+    attempts: 0,
+    leaseUntil: undefined,
+    nextAttemptAt: undefined,
+  });
+  void kickQueue();
 }
 
-/** Called at startup: anything stuck in "processing" (app closed mid-parse) goes back to the queue. */
+/** Called at startup or wakeup: anything stuck in "processing" with an expired lease goes back to the queue. */
 export async function recoverQueue(): Promise<void> {
-  await db.receipts.where('status').equals('processing').modify({ status: 'queued' });
-  void processQueue();
+  await db.receipts.where('status').equals('processing').modify((r: Receipt) => {
+    if (!r.leaseUntil || r.leaseUntil <= Date.now()) {
+      r.status = 'queued';
+      r.leaseUntil = undefined;
+    }
+  });
+  void kickQueue();
 }
 
 /** Persist a reviewed draft as a saved receipt + line items, converting non-USD amounts to USD. */

@@ -1,5 +1,5 @@
 export type BrandTier = 'store' | 'name' | 'unknown';
-export type ReceiptStatus = 'queued' | 'processing' | 'needs_review' | 'error' | 'saved';
+export type ReceiptStatus = 'queued' | 'processing' | 'ai_failed' | 'needs_review' | 'error' | 'saved';
 /** 'bank' is used for bank-statement imported charges. */
 export type ReceiptSource = 'photo' | 'share' | 'manual' | 'import' | 'bank';
 
@@ -36,6 +36,12 @@ export interface Receipt {
   draft?: ParsedReceipt;
   error?: string;
   duplicateOf?: number;
+  parsedBy?: 'gemini' | 'ocr';
+  aiError?: string;
+  leaseUntil?: number;
+  attempts?: number;
+  strikes?: number;
+  nextAttemptAt?: number;
   // Saved fields (amounts are in the receipt's original currency)
   merchant?: string;
   date?: string;
@@ -82,6 +88,9 @@ export interface Settings {
   leakageThreshold: number; // USD
   backupBeforeUpdate: boolean;
   monthlyBudgetTotal?: number; // optional override; defaults to sum of category budgets
+  ocrFallback: boolean; // fall back to on-device OCR when AI fails
+  ocrOnly: boolean; // privacy mode: read on this device only
+  notifyWhenReady: boolean; // show notification when background worker finishes a receipt
 }
 
 export type BankTxStatus = 'unmatched' | 'matched' | 'imported' | 'ignored';

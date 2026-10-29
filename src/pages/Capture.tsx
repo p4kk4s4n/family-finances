@@ -10,7 +10,7 @@ export default function Capture() {
   const uploadRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState('');
   const inFlight = useLiveQuery(
-    () => db.receipts.where('status').anyOf('queued', 'processing', 'needs_review', 'error').reverse().sortBy('createdAt'),
+    () => db.receipts.where('status').anyOf('queued', 'processing', 'ai_failed', 'needs_review', 'error').reverse().sortBy('createdAt'),
     [],
   );
 
@@ -48,9 +48,16 @@ export default function Capture() {
           <button key={r.id} className="list-row" onClick={() => go(`receipt/${r.id}`)}>
             <span>
               <b>{r.draft?.merchant || 'Receipt'}</b>
-              <small>{new Date(r.createdAt).toLocaleString()}{r.duplicateOf ? ' · possible duplicate' : ''}</small>
+              <small>
+                {new Date(r.createdAt).toLocaleString()}
+                {r.duplicateOf ? ' · possible duplicate' : ''}
+                {r.parsedBy === 'ocr' ? ' · read on-device (OCR)' : ''}
+              </small>
             </span>
-            <StatusPill s={r.status} />
+            <span className="row-between">
+              {r.parsedBy === 'ocr' && <span className="pill" data-testid="ocr-pill">OCR</span>}
+              <StatusPill s={r.status} />
+            </span>
           </button>
         ))}
       </Card>

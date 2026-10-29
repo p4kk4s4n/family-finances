@@ -198,3 +198,91 @@ test('coming soon features are visible', async ({ page }) => {
   await page.getByText('Family Relay').click();
   await expect(page.getByText('Shared household envelopes')).toBeVisible();
 });
+
+test('on-device Tesseract OCR fallback when Gemini fails, plus Retry with AI', async ({ page }) => {
+  test.setTimeout(60_000);
+  // 1. Add API key and make Gemini return 403 so it immediately falls back to on-device OCR
+  let aiBlocked = true;
+  await page.route('**/generativelanguage.googleapis.com/**', (route) => {
+    if (aiBlocked) {
+      return route.fulfill({ status: 403, contentType: 'text/plain', body: 'API key restricted' });
+    }
+    return route.fulfill(
+      geminiReply({
+        merchant: 'ALDI FOODS',
+        date: today,
+        currency: 'USD',
+        subtotal: 8.5,
+        tax: 0.5,
+        total: 9.0,
+        paymentMethod: 'Visa',
+        items: [
+          {
+            name: 'Organic Bananas',
+            normalizedName: 'bananas',
+            category: 'Produce',
+            quantity: 1,
+            unitPrice: 2.5,
+            total: 2.5,
+            isDiscretionary: false,
+            brandTier: 'store',
+          },
+          {
+            name: 'Whole Milk Gallon',
+            normalizedName: 'whole milk gallon',
+            category: 'Dairy & Eggs',
+            quantity: 1,
+            unitPrice: 6.0,
+            total: 6.0,
+            isDiscretionary: false,
+            brandTier: 'store',
+          },
+        ],
+      }),
+    );
+  });
+
+  await addKey(page);
+  await page.goto('./#/capture');
+
+  // Generate a crisp synthetic receipt image in the browser canvas and upload it
+  const receiptPngBase64 = await page.evaluate(async () => {
+    const c = document.createElement('canvas');
+    c.width = 700;
+    c.height = 360;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 30px monospace';
+    ctx.fillText('ALDI FOODS', 40, 60);
+    ctx.font = '26px monospace';
+    ctx.fillText('10/25/2026', 40, 110);
+    ctx.fillText('BANANAS                2.50', 40, 170);
+    ctx.fillText('WHOLE MILK             6.00', 40, 220);
+    ctx.fillText('TAX                    0.50', 40, 270);
+    ctx.fillText('TOTAL                  9.00', 40, 320);
+    const dataUrl = c.toDataURL('image/png');
+    return dataUrl.split(',')[1];
+  });
+
+  await page.getByTestId('upload-input').setInputFiles({
+    name: 'ocr-receipt.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(receiptPngBase64, 'base64'),
+  });
+
+  // Expect the receipt to finish via on-device Tesseract OCR and display the OCR badge
+  await expect(page.getByTestId('ocr-pill')).toBeVisible({ timeout: 45_000 });
+  await page.locator('.list-row').first().click();
+
+  // Review screen shows the OCR warning banner + reason + Retry with AI button
+  await expect(page.getByTestId('ocr-banner')).toContainText('Read on this device (OCR)');
+  await shot(page, '12-ocr-fallback-review');
+
+  // Now unblock Gemini and tap "Retry with AI"
+  aiBlocked = false;
+  await page.getByRole('button', { name: 'Retry with AI' }).click();
+  await expect(page.getByTestId('ocr-banner')).toBeHidden({ timeout: 15_000 });
+  await expect(page.locator('.review-item')).toHaveCount(2);
+});
