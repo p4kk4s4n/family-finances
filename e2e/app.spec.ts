@@ -286,3 +286,55 @@ test('on-device Tesseract OCR fallback when Gemini fails, plus Retry with AI', a
   await expect(page.getByTestId('ocr-banner')).toBeHidden({ timeout: 15_000 });
   await expect(page.locator('.review-item')).toHaveCount(2);
 });
+
+test('Galaxy Fold slim cover screen (280px) and unfolded wide screen (768px) adapt cleanly with consistent font and icon sizes', async ({ page }) => {
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Family Finances' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Budgets this month' })).toBeVisible();
+
+  const measureTypographyAndOverflow = async () =>
+    page.evaluate(() => {
+      const h1 = document.querySelector('.topbar h1')!;
+      const navIcon = document.querySelector('.bottomnav .navicon')!;
+      const navLabel = document.querySelector('.bottomnav .navlabel')!;
+      const cardTitle = document.querySelector('.card h2')!;
+      const cs = (el: Element) => window.getComputedStyle(el);
+      return {
+        overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        h1Font: cs(h1).fontSize,
+        navIconFont: cs(navIcon).fontSize,
+        navIconWidth: cs(navIcon).width,
+        navLabelFont: cs(navLabel).fontSize,
+        cardTitleFont: cs(cardTitle).fontSize,
+      };
+    });
+
+  // 1. Galaxy Fold slim outer cover screen (280 x 653)
+  await page.setViewportSize({ width: 280, height: 653 });
+  const slim = await measureTypographyAndOverflow();
+  expect(slim.overflowX).toBe(false);
+  await shot(page, '13-fold-slim-280');
+
+  // 2. Standard phone screen (412 x 915)
+  await page.setViewportSize({ width: 412, height: 915 });
+  const standard = await measureTypographyAndOverflow();
+  expect(standard.overflowX).toBe(false);
+
+  // 3. Galaxy Fold unfolded inner wide screen (768 x 884)
+  await page.setViewportSize({ width: 768, height: 884 });
+  const wide = await measureTypographyAndOverflow();
+  expect(wide.overflowX).toBe(false);
+  await shot(page, '14-fold-wide-768');
+
+  // Verify font sizes and icon dimensions stay strictly identical across slim, standard, and wide viewports
+  expect(slim.h1Font).toBe(standard.h1Font);
+  expect(wide.h1Font).toBe(standard.h1Font);
+  expect(slim.navIconFont).toBe(standard.navIconFont);
+  expect(wide.navIconFont).toBe(standard.navIconFont);
+  expect(slim.navIconWidth).toBe(standard.navIconWidth);
+  expect(wide.navIconWidth).toBe(standard.navIconWidth);
+  expect(slim.navLabelFont).toBe(standard.navLabelFont);
+  expect(wide.navLabelFont).toBe(standard.navLabelFont);
+  expect(slim.cardTitleFont).toBe(standard.cardTitleFont);
+  expect(wide.cardTitleFont).toBe(standard.cardTitleFont);
+});
